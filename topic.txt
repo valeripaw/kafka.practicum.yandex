@@ -1,0 +1,13 @@
+Шаг 1. Создайте топик с 3 партициями и 2 репликами через консоль
+
+docker exec kafka1 kafka-topics --create \
+  --topic test-topic \
+  --bootstrap-server localhost:9092 \
+  --partitions 3 \
+  --replication-factor 2
+
+
+--topic название топика
+--bootstrap-server адрес одного из брокеров
+--partitions кол-во партиций
+--replication-factor на сколько брокеров будет скопирована каждая партиция
