@@ -1,69 +1,74 @@
 package ru.valeripaw.kafka;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.util.StringUtils;
 import ru.valeripaw.kafka.consumer.BatchMessageConsumer;
 import ru.valeripaw.kafka.consumer.SingleMessageConsumer;
-import ru.valeripaw.kafka.producer.KafkaExampleProducer;
+import ru.valeripaw.kafka.producer.ExampleEvenProducer;
+import ru.valeripaw.kafka.properties.KafkaProperties;
 
+import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@Slf4j
 @SpringBootApplication
+@EnableConfigurationProperties(KafkaProperties.class)
 public class KafkaApplication {
 
-	public static void main(String[] args) {
-		String bootstrapServers = "localhost:9092";
-		String topic = "test-topic";
+    public static void main(String[] args) {
+        ApplicationContext context = SpringApplication.run(KafkaApplication.class, args);
 
-		// 1. Продюсер
-		try (KafkaExampleProducer producer = new KafkaExampleProducer(bootstrapServers, topic)) {
-			// Отправим 30 сообщений для теста
-			for (int i = 0; i < 30; i++) {
-				producer.sendMessage("key-" + i, "message-" + i);
-				try {
-					Thread.sleep(100); // небольшая задержка между отправками
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					break;
-				}
-			}
+        KafkaProperties kafkaProperties = context.getBean(KafkaProperties.class);
 
-			System.out.println("Все сообщения отправлены. Запуск консьюмеров...");
+        try (ExecutorService executorSingleMessage = Executors.newSingleThreadExecutor();
+             ExecutorService executorBatchMessage = Executors.newSingleThreadExecutor()) {
+            submit(executorSingleMessage, executorBatchMessage, kafkaProperties);
+        } catch (Exception e) {
+            log.error("{}", e.getMessage(), e);
+        }
 
-			// Пауза, чтобы сообщения успели записаться
-			Thread.sleep(2000);
+        System.exit(0);
+    }
 
-			// 2. Запуск SingleMessageConsumer в отдельном потоке
-			Thread singleConsumerThread = new Thread(() -> {
-				try (SingleMessageConsumer consumer = new SingleMessageConsumer(
-						bootstrapServers, "group-single", topic)) {
-					consumer.start();
-				} catch (Exception e) {
-					System.err.println("Ошибка в SingleMessageConsumer потоке: " + e.getMessage());
-				}
-			});
+    private static void submit(ExecutorService executorSingleMessage, ExecutorService executorBatchMessage,
+                               KafkaProperties kafkaProperties) {
+        try (SingleMessageConsumer singleMessageConsumer = new SingleMessageConsumer(kafkaProperties);
+             BatchMessageConsumer batchMessageConsumer = new BatchMessageConsumer(kafkaProperties);
+             ExampleEvenProducer exampleEvenProducer = new ExampleEvenProducer(kafkaProperties)) {
+            log.info("запустили SingleMessageConsumer");
+            executorSingleMessage.submit(singleMessageConsumer);
 
-			// 3. Запуск BatchMessageConsumer в отдельном потоке
-			Thread batchConsumerThread = new Thread(() -> {
-				try (BatchMessageConsumer consumer = new BatchMessageConsumer(
-						bootstrapServers, "group-batch", topic)) {
-					consumer.start();
-				} catch (Exception e) {
-					System.err.println("Ошибка в BatchMessageConsumer потоке: " + e.getMessage());
-				}
-			});
+            log.info("запустили BatchMessageConsumer");
+            executorBatchMessage.submit(batchMessageConsumer);
 
-			// Запускаем оба консьюмера
-			singleConsumerThread.start();
-			batchConsumerThread.start();
+            Scanner scanner = new Scanner(System.in);
+            log.info("Введите сообщения (для выхода введите 'exit'):");
 
-			// Ждём завершения (или можно оставить работать)
-			singleConsumerThread.join(10_000); // 10 секунд
-			batchConsumerThread.join(10_000);
+            int idx = 0;
+            while (true) {
+                String input = scanner.nextLine();
 
-			// Прерываем, если ещё работают
-			singleConsumerThread.interrupt();
-			batchConsumerThread.interrupt();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+                if (input.equals("exit")) {
+                    log.info("Выход из программы.");
+                    break;
+                }
+
+                if (StringUtils.hasText(input)) {
+                    String key = "key" + idx % 4;
+                    exampleEvenProducer.sendMessage(key, input);
+                    idx++;
+                }
+            }
+
+            scanner.close();
+        } catch (Exception e) {
+            log.error("{}", e.getMessage(), e);
+        }
+    }
 
 }

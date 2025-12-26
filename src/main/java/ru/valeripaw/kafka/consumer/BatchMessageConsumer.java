@@ -1,54 +1,81 @@
 package ru.valeripaw.kafka.consumer;
 
-import org.apache.kafka.clients.consumer.*;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import ru.valeripaw.kafka.properties.ConsumerProperties;
+import ru.valeripaw.kafka.properties.KafkaProperties;
 
+import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
-public class BatchMessageConsumer implements AutoCloseable {
-    private final Consumer<String, String> consumer;
-    private final String topic;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MIN_BYTES_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
-    public BatchMessageConsumer(String bootstrapServers, String groupId, String topic) {
-        this.topic = topic;
+@Slf4j
+public class BatchMessageConsumer implements Closeable, Runnable {
+
+    private final ConsumerProperties consumerProperties;
+    private final Consumer<String, String> consumer;
+
+    private boolean stopped = false;
+
+    public BatchMessageConsumer(KafkaProperties kafkaProperties) {
+        this.consumerProperties = kafkaProperties.getBatchMessage();
 
         // Настройка консьюмера – адрес сервера, сериализаторы для ключа и значения
         Properties properties = new Properties();
-        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.put(BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
+        properties.put(GROUP_ID_CONFIG, consumerProperties.getGroupId());
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         // Отключаем авто-коммит — управляем вручную
-        properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        properties.put(ENABLE_AUTO_COMMIT_CONFIG, consumerProperties.isEnableAutoCommit());
 
         // Читаем минимум 10 сообщений за poll
-        properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "10");
-        properties.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, "1024"); // ждать минимум 1KB
-        properties.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "500"); // ждать до 500мс, если мало данных
+        properties.put(MAX_POLL_RECORDS_CONFIG, consumerProperties.getMaxPollRecords());
+        // ждать минимум 1 KB
+        properties.put(FETCH_MIN_BYTES_CONFIG, consumerProperties.getFetchMinBytes());
+        // ждать до 1000 мс, если мало данных
+        properties.put(FETCH_MAX_WAIT_MS_CONFIG, consumerProperties.getFetchMaxWaitMs());
 
         this.consumer = new KafkaConsumer<>(properties);
-        consumer.subscribe(Collections.singletonList(topic));
+        consumer.subscribe(Collections.singletonList(consumerProperties.getTopic()));
+
+        log.info("BatchMessageConsumer подписан на топик {}", consumerProperties.getTopic());
     }
 
-    public void start() {
-        System.out.println("BatchMessageConsumer запущен. Ожидание пачек сообщений...");
+    @Override
+    public void run() {
+        log.info("BatchMessageConsumer запущен. Ожидание пачек сообщений...");
+
+        long pollDuration = consumerProperties.getPollDurationMs();
 
         try {
-            while (!Thread.currentThread().isInterrupted()) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+            while (!stopped && !Thread.currentThread().isInterrupted()) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
 
                 if (records.isEmpty()) {
                     continue;
                 }
 
-                System.out.printf("Получено %d сообщений для обработки в пачке%n", records.count());
+                log.info("Получено {} сообщений для обработки в пачке", records.count());
 
                 for (ConsumerRecord<String, String> record : records) {
-                    System.out.printf("Получено сообщение (авто-коммит): " +
-                                    "topic=%s, partition=%d, offset=%d, key=%s, message=%s%n",
+                    log.info("Получено сообщение: topic={}, partition={}, offset={}, key={}, message={}",
                             record.topic(), record.partition(), record.offset(), record.key(), record.value());
 
                     processMessage(record);
@@ -56,18 +83,23 @@ public class BatchMessageConsumer implements AutoCloseable {
 
                 // Единый коммит после всей пачки
                 consumer.commitSync();
-                System.out.printf("Коммит оффсета после обработки %d сообщений%n", records.count());
+                log.info("Коммит оффсета после обработки {} сообщений", records.count());
+            }
+        } catch (WakeupException e) {
+            // игнорируем при закрытии
+            if (!stopped) {
+                throw e;
             }
         } catch (Exception e) {
-            System.err.println("Ошибка в BatchMessageConsumer: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Ошибка в BatchMessageConsumer: {}", e.getMessage(), e);
         }
     }
 
     private void processMessage(ConsumerRecord<String, String> record) {
         // Имитация обработки
         try {
-            Thread.sleep(5); // имитация работы
+            // имитация работы
+            Thread.sleep(5);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -75,14 +107,11 @@ public class BatchMessageConsumer implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Завершение BatchMessageConsumer");
+        stopped = true;
+
         if (consumer != null) {
-            try {
-                consumer.commitSync(); // финальный коммит
-            } catch (Exception e) {
-                System.err.println("Ошибка при финальном коммите: " + e.getMessage());
-            } finally {
-                consumer.close();
-            }
+            consumer.wakeup();
         }
     }
 
