@@ -6,6 +6,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 import ru.valeripaw.kafka.properties.ConsumerProperties;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 
@@ -13,9 +16,18 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.*;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MIN_BYTES_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 @Slf4j
+@Service
+@EnableConfigurationProperties(KafkaProperties.class)
 public class BatchMessageConsumer implements AutoCloseable {
 
     private final ConsumerProperties consumerProperties;
@@ -43,8 +55,11 @@ public class BatchMessageConsumer implements AutoCloseable {
 
         this.consumer = new KafkaConsumer<>(properties);
         consumer.subscribe(Collections.singletonList(consumerProperties.getTopic()));
+
+        log.info("BatchMessageConsumer подписан на топик {}", consumerProperties.getTopic());
     }
 
+    @Async
     public void start() {
         log.info("BatchMessageConsumer запущен. Ожидание пачек сообщений...");
 

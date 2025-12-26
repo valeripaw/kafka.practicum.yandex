@@ -1,15 +1,37 @@
 package ru.valeripaw.kafka;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.scheduling.annotation.EnableAsync;
+import ru.valeripaw.kafka.consumer.BatchMessageConsumer;
+import ru.valeripaw.kafka.consumer.SingleMessageConsumer;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@Slf4j
 @SpringBootApplication
-@EnableConfigurationProperties
+@EnableAsync
 public class KafkaApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(KafkaApplication.class, args);
+        ApplicationContext context = SpringApplication.run(KafkaApplication.class, args);
+
+        SingleMessageConsumer singleMessageConsumer = context.getBean(SingleMessageConsumer.class);
+        try (ExecutorService executorSingleMessage = Executors.newSingleThreadExecutor()) {
+            log.info("запустили SingleMessageConsumer");
+            executorSingleMessage.submit(singleMessageConsumer::start);
+        }
+
+        BatchMessageConsumer batchMessageConsumer = context.getBean(BatchMessageConsumer.class);
+        try (ExecutorService executorBatchMessage = Executors.newSingleThreadExecutor()) {
+            log.info("запустили BatchMessageConsumer");
+            executorBatchMessage.submit(batchMessageConsumer::start);
+        }
+
+
     }
 
 //	public static void main(String[] args) {

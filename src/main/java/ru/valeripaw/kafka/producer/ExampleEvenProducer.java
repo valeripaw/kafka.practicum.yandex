@@ -5,21 +5,30 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.stereotype.Service;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 import ru.valeripaw.kafka.properties.ProducerProperties;
 
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.clients.producer.ProducerConfig.*;
+import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Slf4j
-public class KafkaExampleProducer implements AutoCloseable {
+@Service
+@EnableConfigurationProperties(KafkaProperties.class)
+public class ExampleEvenProducer implements AutoCloseable {
 
     private final ProducerProperties producerProperties;
     private final Producer<String, String> producer;
 
-    public KafkaExampleProducer(KafkaProperties kafkaProperties) {
+    public ExampleEvenProducer(KafkaProperties kafkaProperties) {
         this.producerProperties = kafkaProperties.getExampleEvent();
 
         // Конфигурация продюсера – адрес сервера, сериализаторы для ключа и значения

@@ -1,12 +1,17 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
 kafka:
-  bootstrap-servers: dummy
+  bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
   batch-message:
     topic: test-topic
     group-id: test-topic.0
     enable-auto-commit: false
     max-poll-records: 10
-    fetch-min-bytes: 1024
-    fetch-max-wait-ms: 1000
+    fetch-min-bytes: 4096
+    fetch-max-wait-ms: 10000
     poll-duration-ms: 1000
   single-message:
     topic: test-topic
