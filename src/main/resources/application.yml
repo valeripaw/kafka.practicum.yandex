@@ -10,8 +10,16 @@ kafka:
     group-id: test-topic.0
     enable-auto-commit: false
     max-poll-records: 100
-    fetch-min-bytes: 16384
-    fetch-max-wait-ms: 10000
+    # так как min-poll-records не существует, чтобы читать минимум 10 сообщений за раз,
+    # необходимо подобрать значения fetch-min-bytes и fetch-max-wait-ms:
+    #   - для своего проекта подбирала имперически
+    # fetch-min-bytes задает минимальный объем данных (в байтах), который брокер должен вернуть в ответ на запрос на выборку.
+    # Если доступных данных меньше этого значения, запрос будет ожидать накопления дополнительных данных, вплоть до значения fetch.max.wait.ms.
+    fetch-min-bytes: 512
+    # fetch-max-wait-ms определяет максимальное время, в течение которого брокер будет ждать накопления значения fetch.min.bytes,
+    # прежде чем отправить неполный пакет данных.
+    # 30000 ms = 30 sec
+    fetch-max-wait-ms: 30000
     poll-duration-ms: 1000
   single-message:
     topic: test-topic

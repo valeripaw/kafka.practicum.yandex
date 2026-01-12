@@ -1,94 +1,8 @@
 # Запуск Kafka-кластера
 
-1. Создайте файл `docker-compose.yml` со следующим содержимым:
+1. Запустите kafka кластер командой:
 ```
-version: '3.8'
-
-networks:
-  kafka-net:
-    driver: bridge
-    name: kafka-cluster-network
-
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
-    container_name: zookeeper
-    networks:
-      - kafka-net
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka1:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka1
-    networks:
-      - kafka-net
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,CLIENT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,CLIENT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-
-  kafka2:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka2
-    networks:
-      - kafka-net
-    ports:
-      - "9093:9093"
-    environment:
-      KAFKA_BROKER_ID: 2
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19093,CLIENT://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19093,CLIENT://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-
-  kafka3:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka3
-    networks:
-      - kafka-net
-    ports:
-      - "9094:9094"
-    environment:
-      KAFKA_BROKER_ID: 3
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19094,CLIENT://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19094,CLIENT://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    networks:
-      - kafka-net
-    ports:
-      - "8080:8080"
-    depends_on:
-      - kafka1
-      - kafka2
-      - kafka3
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local-cluster
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092,kafka2:19093,kafka3:19094
-      DYNAMIC_CONFIG_ENABLED: "true"
-```
-
-2. Запустите кластер командой:
-```
-docker-compose up -d
+docker-compose -f docker-compose-kafka.yml up -d
 ```
 
 Подождите 1–2 минуты, пока все сервисы запустятся.
@@ -105,99 +19,6 @@ docker-compose up -d
 | `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3` | Гарантирует, что топик `__consumer_offsets` реплицируется на все 3 брокера (высокая доступность). |
 | `KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3` | Аналогично для транзакционных логов. |
 | `KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2` | Минимальное количество реплик, которые должны подтвердить запись для транзакций. |
-
-# Запуск Kafka-кластера под arm64
-
-1. Создайте файл `docker-compose.yml` со следующим содержимым:
-```
-version: '3.8'
-
-networks:
-  kafka-net:
-    driver: bridge
-    name: kafka-cluster-network
-
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
-    container_name: zookeeper
-    platform: linux/arm64
-    networks:
-      - kafka-net
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka1:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka1
-    platform: linux/arm64
-    networks:
-      - kafka-net
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,CLIENT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,CLIENT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-
-  kafka2:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka2
-    platform: linux/arm64
-    networks:
-      - kafka-net
-    ports:
-      - "9093:9093"
-    environment:
-      KAFKA_BROKER_ID: 2
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19093,CLIENT://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19093,CLIENT://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-
-  kafka3:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka3
-    platform: linux/arm64
-    networks:
-      - kafka-net
-    ports:
-      - "9094:9094"
-    environment:
-      KAFKA_BROKER_ID: 3
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19094,CLIENT://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19094,CLIENT://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    platform: linux/arm64
-    networks:
-      - kafka-net
-    ports:
-      - "8080:8080"
-    depends_on:
-      - kafka1
-      - kafka2
-      - kafka3
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local-cluster
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092,kafka2:19093,kafka3:19094
-      DYNAMIC_CONFIG_ENABLED: "true"
-```
 
 # Проверка работоспособности кластера
 
@@ -265,6 +86,21 @@ docker exec -it kafka1 kafka-console-consumer --bootstrap-server kafka1:9092 --t
    - Просматривать сообщения в топиках
    - Создавать новые топики через UI
    - Отслеживать потребление сообщений
+
+# Запуск приложения
+
+1. Запустите приложение командой 
+
+```
+docker-compose -f docker-compose-app.yml up -d
+```
+
+Подождите 1–2 минуты, пока пока поднимутся два контейнера.
+
+Приложение будет генерировать и отправлять в топик одно сообщение раз в три секудны. 
+Консьюмеры будут читать сообщения в сответствие с их настройками:
+    - SingleMessageConsumer по одному сообщению за раз;
+    - BatchMessageConsumer минимум по 10 сообщений за один раз.
 
 # Остановка кластера
 
