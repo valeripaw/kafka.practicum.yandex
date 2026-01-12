@@ -5,13 +5,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
 import ru.valeripaw.kafka.properties.ConsumerProperties;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 
+import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
@@ -25,12 +24,12 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 @Slf4j
-@Service
-@EnableConfigurationProperties(KafkaProperties.class)
-public class SingleMessageConsumer implements AutoCloseable {
+public class SingleMessageConsumer implements Closeable, Runnable {
 
     private final ConsumerProperties consumerProperties;
     private final Consumer<String, String> consumer;
+
+    private boolean stopped = false;
 
     public SingleMessageConsumer(KafkaProperties kafkaProperties) {
         this.consumerProperties = kafkaProperties.getSingleMessage();
@@ -55,14 +54,14 @@ public class SingleMessageConsumer implements AutoCloseable {
         log.info("SingleMessageConsumer подписан на топик {}", consumerProperties.getTopic());
     }
 
-    @Async
-    public void start() {
+    @Override
+    public void run() {
         log.info("SingleMessageConsumer запущен. Ожидание сообщений по одному...");
 
         long pollDuration = consumerProperties.getPollDurationMs();
 
         try {
-            while (!Thread.currentThread().isInterrupted()) {
+            while (!stopped && !Thread.currentThread().isInterrupted()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
 
                 for (ConsumerRecord<String, String> record : records) {
@@ -71,6 +70,11 @@ public class SingleMessageConsumer implements AutoCloseable {
 
                     processMessage(record);
                 }
+            }
+        } catch (WakeupException e) {
+            // игнорируем при закрытии
+            if (!stopped) {
+                throw e;
             }
         } catch (Exception e) {
             log.error("Ошибка в SingleMessageConsumer: {}", e.getMessage(), e);
@@ -89,8 +93,11 @@ public class SingleMessageConsumer implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Завершение SingleMessageConsumer");
+        stopped = true;
+
         if (consumer != null) {
-            consumer.close();
+            consumer.wakeup();
         }
     }
 

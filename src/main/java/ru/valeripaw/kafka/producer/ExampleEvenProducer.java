@@ -5,11 +5,10 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.stereotype.Service;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 import ru.valeripaw.kafka.properties.ProducerProperties;
 
+import java.io.Closeable;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -21,9 +20,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Slf4j
-@Service
-@EnableConfigurationProperties(KafkaProperties.class)
-public class ExampleEvenProducer implements AutoCloseable {
+public class ExampleEvenProducer implements Closeable {
 
     private final ProducerProperties producerProperties;
     private final Producer<String, String> producer;
@@ -46,6 +43,8 @@ public class ExampleEvenProducer implements AutoCloseable {
     }
 
     public void sendMessage(String key, String message) {
+        log.info("Получили сообщение: key={}, message={}", key, message);
+
         ProducerRecord<String, String> record = new ProducerRecord<>(producerProperties.getTopic(), key, message);
 
         // Асинхронная отправка с колбэком
@@ -68,6 +67,7 @@ public class ExampleEvenProducer implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Завершение ExampleEvenProducer");
         if (producer != null) {
             // отправить всё, что в буфере
             producer.flush();

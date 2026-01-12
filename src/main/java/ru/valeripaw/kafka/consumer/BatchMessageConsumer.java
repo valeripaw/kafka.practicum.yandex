@@ -5,13 +5,12 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
 import ru.valeripaw.kafka.properties.ConsumerProperties;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 
+import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
@@ -26,12 +25,12 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
 @Slf4j
-@Service
-@EnableConfigurationProperties(KafkaProperties.class)
-public class BatchMessageConsumer implements AutoCloseable {
+public class BatchMessageConsumer implements Closeable, Runnable {
 
     private final ConsumerProperties consumerProperties;
     private final Consumer<String, String> consumer;
+
+    private boolean stopped = false;
 
     public BatchMessageConsumer(KafkaProperties kafkaProperties) {
         this.consumerProperties = kafkaProperties.getBatchMessage();
@@ -59,14 +58,14 @@ public class BatchMessageConsumer implements AutoCloseable {
         log.info("BatchMessageConsumer подписан на топик {}", consumerProperties.getTopic());
     }
 
-    @Async
-    public void start() {
+    @Override
+    public void run() {
         log.info("BatchMessageConsumer запущен. Ожидание пачек сообщений...");
 
         long pollDuration = consumerProperties.getPollDurationMs();
 
         try {
-            while (!Thread.currentThread().isInterrupted()) {
+            while (!stopped && !Thread.currentThread().isInterrupted()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
 
                 if (records.isEmpty()) {
@@ -76,7 +75,7 @@ public class BatchMessageConsumer implements AutoCloseable {
                 log.info("Получено {} сообщений для обработки в пачке", records.count());
 
                 for (ConsumerRecord<String, String> record : records) {
-                    log.info("Получено сообщение (авто-коммит): topic={}, partition={}, offset={}, key={}, message={}",
+                    log.info("Получено сообщение: topic={}, partition={}, offset={}, key={}, message={}",
                             record.topic(), record.partition(), record.offset(), record.key(), record.value());
 
                     processMessage(record);
@@ -85,6 +84,11 @@ public class BatchMessageConsumer implements AutoCloseable {
                 // Единый коммит после всей пачки
                 consumer.commitSync();
                 log.info("Коммит оффсета после обработки {} сообщений", records.count());
+            }
+        } catch (WakeupException e) {
+            // игнорируем при закрытии
+            if (!stopped) {
+                throw e;
             }
         } catch (Exception e) {
             log.error("Ошибка в BatchMessageConsumer: {}", e.getMessage(), e);
@@ -103,15 +107,11 @@ public class BatchMessageConsumer implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Завершение BatchMessageConsumer");
+        stopped = true;
+
         if (consumer != null) {
-            try {
-                // финальный коммит
-                consumer.commitSync();
-            } catch (Exception e) {
-                log.error("Ошибка при финальном коммите: {}", e.getMessage(), e);
-            } finally {
-                consumer.close();
-            }
+            consumer.wakeup();
         }
     }
 
