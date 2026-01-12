@@ -47,9 +47,9 @@ public class BatchMessageConsumer implements Closeable, Runnable {
 
         // Читаем минимум 10 сообщений за poll
         properties.put(MAX_POLL_RECORDS_CONFIG, consumerProperties.getMaxPollRecords());
-        // ждать минимум 1 KB
+        // ждать минимум N байт
         properties.put(FETCH_MIN_BYTES_CONFIG, consumerProperties.getFetchMinBytes());
-        // ждать до 1000 мс, если мало данных
+        // ждать до N мс, если мало данных
         properties.put(FETCH_MAX_WAIT_MS_CONFIG, consumerProperties.getFetchMaxWaitMs());
 
         this.consumer = new KafkaConsumer<>(properties);
@@ -66,24 +66,7 @@ public class BatchMessageConsumer implements Closeable, Runnable {
 
         try {
             while (!stopped && !Thread.currentThread().isInterrupted()) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
-
-                if (records.isEmpty()) {
-                    continue;
-                }
-
-                log.info("Получено {} сообщений для обработки в пачке", records.count());
-
-                for (ConsumerRecord<String, String> record : records) {
-                    log.info("Получено сообщение: topic={}, partition={}, offset={}, key={}, message={}",
-                            record.topic(), record.partition(), record.offset(), record.key(), record.value());
-
-                    processMessage(record);
-                }
-
-                // Единый коммит после всей пачки
-                consumer.commitSync();
-                log.info("Коммит оффсета после обработки {} сообщений", records.count());
+                readMessage(pollDuration);
             }
         } catch (WakeupException e) {
             // игнорируем при закрытии
@@ -95,16 +78,6 @@ public class BatchMessageConsumer implements Closeable, Runnable {
         }
     }
 
-    private void processMessage(ConsumerRecord<String, String> record) {
-        // Имитация обработки
-        try {
-            // имитация работы
-            Thread.sleep(5);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
     @Override
     public void close() {
         log.info("Завершение BatchMessageConsumer");
@@ -112,6 +85,41 @@ public class BatchMessageConsumer implements Closeable, Runnable {
 
         if (consumer != null) {
             consumer.wakeup();
+        }
+    }
+
+    private void readMessage(long pollDuration) {
+        try {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
+
+            if (records.isEmpty()) {
+                return;
+            }
+
+            log.info("Получено {} сообщений для обработки в пачке", records.count());
+
+            for (ConsumerRecord<String, String> record : records) {
+                log.info("Получено сообщение: topic={}, partition={}, offset={}, key={}, message={}",
+                        record.topic(), record.partition(), record.offset(), record.key(), record.value());
+
+                processMessage(record);
+            }
+
+            // Единый коммит после всей пачки
+            consumer.commitSync();
+            log.info("Коммит оффсета после обработки {} сообщений", records.count());
+        } catch (Exception e) {
+            log.error("{}", e.getMessage(), e);
+        }
+    }
+
+    private void processMessage(ConsumerRecord<String, String> record) {
+        // Имитация обработки
+        try {
+            // имитация работы
+            Thread.sleep(5);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

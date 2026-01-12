@@ -62,14 +62,7 @@ public class SingleMessageConsumer implements Closeable, Runnable {
 
         try {
             while (!stopped && !Thread.currentThread().isInterrupted()) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
-
-                for (ConsumerRecord<String, String> record : records) {
-                    log.info("Получено сообщение (авто-коммит): topic={}, partition={}, offset={}, key={}, message={}",
-                            record.topic(), record.partition(), record.offset(), record.key(), record.value());
-
-                    processMessage(record);
-                }
+                readMessage(pollDuration);
             }
         } catch (WakeupException e) {
             // игнорируем при закрытии
@@ -78,16 +71,6 @@ public class SingleMessageConsumer implements Closeable, Runnable {
             }
         } catch (Exception e) {
             log.error("Ошибка в SingleMessageConsumer: {}", e.getMessage(), e);
-        }
-    }
-
-    private void processMessage(ConsumerRecord<String, String> record) {
-        // Имитация обработки
-        try {
-            // имитация работы
-            Thread.sleep(5);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -101,4 +84,28 @@ public class SingleMessageConsumer implements Closeable, Runnable {
         }
     }
 
+    private void readMessage(long pollDuration) {
+        try {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(pollDuration));
+
+            for (ConsumerRecord<String, String> record : records) {
+                log.info("Получено сообщение (авто-коммит): topic={}, partition={}, offset={}, key={}, message={}",
+                        record.topic(), record.partition(), record.offset(), record.key(), record.value());
+
+                processMessage(record);
+            }
+        } catch (Exception e) {
+            log.error("{}", e.getMessage(), e);
+        }
+    }
+
+    private void processMessage(ConsumerRecord<String, String> record) {
+        // Имитация обработки
+        try {
+            // имитация работы
+            Thread.sleep(5);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
