@@ -4,13 +4,13 @@ spring:
       enabled: false
 
 kafka:
-  bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+  bootstrap-servers: ${BOOTSTRAP_SERVERS}
   batch-message:
     topic: test-topic
     group-id: test-topic.0
     enable-auto-commit: false
-    max-poll-records: 10
-    fetch-min-bytes: 4096
+    max-poll-records: 100
+    fetch-min-bytes: 16384
     fetch-max-wait-ms: 10000
     poll-duration-ms: 1000
   single-message:
