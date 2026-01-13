@@ -1,10 +1,12 @@
 package ru.valeripaw.kafka.producer;
 
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import ru.valeripaw.kafka.dto.Cat;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 import ru.valeripaw.kafka.properties.ProducerProperties;
 
@@ -12,18 +14,20 @@ import java.io.Closeable;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Slf4j
 public class ExampleEvenProducer implements Closeable {
 
     private final ProducerProperties producerProperties;
-    private final Producer<String, String> producer;
+    private final Producer<String, Cat> producer;
 
     public ExampleEvenProducer(KafkaProperties kafkaProperties) {
         this.producerProperties = kafkaProperties.getExampleEvent();
@@ -32,20 +36,24 @@ public class ExampleEvenProducer implements Closeable {
         Properties properties = new Properties();
         properties.put(BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
         properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.put(VALUE_SERIALIZER_CLASS_CONFIG, KafkaJsonSchemaSerializer.class.getName());
+        properties.put(SCHEMA_REGISTRY_URL_CONFIG, kafkaProperties.getSchemaRegistryUrl());
 
         // Рекомендуемые настройки для надёжности
         properties.put(ACKS_CONFIG, producerProperties.getAcks());
+        // Кол-во попыток
         properties.put(RETRIES_CONFIG, producerProperties.getRetries());
+        // Задержка между попытками
+        properties.put(RETRY_BACKOFF_MS_CONFIG, producerProperties.getRetryBackoffMs());
         properties.put(ENABLE_IDEMPOTENCE_CONFIG, producerProperties.isEnableIdempotence());
 
         this.producer = new KafkaProducer<>(properties);
     }
 
-    public void sendMessage(String key, String message) {
+    public void sendMessage(String key, Cat message) {
         log.info("Получили сообщение: key={}, message={}", key, message);
 
-        ProducerRecord<String, String> record = new ProducerRecord<>(producerProperties.getTopic(), key, message);
+        ProducerRecord<String, Cat> record = new ProducerRecord<>(producerProperties.getTopic(), key, message);
 
         // Асинхронная отправка с колбэком
         producer.send(record, (metadata, exception) -> {
@@ -59,8 +67,8 @@ public class ExampleEvenProducer implements Closeable {
     }
 
     // Блокирующая отправка (опционально)
-    public void sendMessageSync(String key, String value) throws ExecutionException, InterruptedException {
-        ProducerRecord<String, String> record = new ProducerRecord<>(producerProperties.getTopic(), key, value);
+    public void sendMessageSync(String key, Cat message) throws ExecutionException, InterruptedException {
+        ProducerRecord<String, Cat> record = new ProducerRecord<>(producerProperties.getTopic(), key, message);
         // ждём подтверждения
         producer.send(record).get();
     }

@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public class KafkaProperties {
 
     private String bootstrapServers;
+    private String schemaRegistryUrl;
 
     @NestedConfigurationProperty
     private ConsumerProperties batchMessage;

@@ -5,6 +5,7 @@ spring:
 
 kafka:
   bootstrap-servers: ${BOOTSTRAP_SERVERS}
+  schema-registry-url: ${SCHEMA_REGISTRY_URL}
   batch-message:
     topic: test-topic
     group-id: test-topic.0
@@ -32,4 +33,5 @@ kafka:
     topic: test-topic
     acks: "all"
     retries: 3
+    retry-backoff-ms: 1000
     enable-idempotence: true
