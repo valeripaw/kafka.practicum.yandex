@@ -105,8 +105,6 @@ public class SingleMessageConsumer implements Closeable, Runnable {
             if (e instanceof RecordDeserializationException ex) {
                 consumer.seek(ex.topicPartition(), ex.offset() + 1L);
                 consumer.commitSync();
-            } else {
-                log.error("Exception not handled", e);
             }
         }
     }
