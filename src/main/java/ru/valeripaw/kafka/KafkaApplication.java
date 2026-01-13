@@ -7,9 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import ru.valeripaw.kafka.consumer.BatchMessageConsumer;
 import ru.valeripaw.kafka.consumer.SingleMessageConsumer;
+import ru.valeripaw.kafka.dto.Cat;
 import ru.valeripaw.kafka.producer.ExampleEvenProducer;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 
+import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,6 +20,8 @@ import java.util.concurrent.Executors;
 @SpringBootApplication
 @EnableConfigurationProperties(KafkaProperties.class)
 public class KafkaApplication {
+
+    private static final Random random = new Random();
 
     public static void main(String[] args) {
         ApplicationContext context = SpringApplication.run(KafkaApplication.class, args);
@@ -45,9 +49,11 @@ public class KafkaApplication {
 
             int idx = 0;
             while (true) {
+                Cat cat = new Cat();
+                cat.setName(UUID.randomUUID().toString().substring(0, 7));
+                cat.setAge(random.nextInt(20) + 1);
                 String key = "key" + idx % 3;
-                String msg = UUID.randomUUID().toString().substring(0, 7);
-                exampleEvenProducer.sendMessage(key, msg);
+                exampleEvenProducer.sendMessage(key, cat);
                 idx++;
                 Thread.sleep(3000);
             }
