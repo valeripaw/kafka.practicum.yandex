@@ -20,6 +20,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Slf4j
@@ -40,7 +41,10 @@ public class ExampleEvenProducer implements Closeable {
 
         // Рекомендуемые настройки для надёжности
         properties.put(ACKS_CONFIG, producerProperties.getAcks());
+        // Кол-во попыток
         properties.put(RETRIES_CONFIG, producerProperties.getRetries());
+        // Задержка между попытками
+        properties.put(RETRY_BACKOFF_MS_CONFIG, producerProperties.getRetryBackoffMs());
         properties.put(ENABLE_IDEMPOTENCE_CONFIG, producerProperties.isEnableIdempotence());
 
         this.producer = new KafkaProducer<>(properties);

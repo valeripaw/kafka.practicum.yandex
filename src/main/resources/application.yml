@@ -33,4 +33,5 @@ kafka:
     topic: test-topic
     acks: "all"
     retries: 3
+    retry-backoff-ms: 1000
     enable-idempotence: true
