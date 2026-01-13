@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import ru.valeripaw.kafka.dto.Cat;
@@ -114,6 +115,11 @@ public class BatchMessageConsumer implements Closeable, Runnable {
             log.info("Коммит оффсета после обработки {} сообщений", records.count());
         } catch (Exception e) {
             log.error("{}", e.getMessage(), e);
+
+            if (e instanceof RecordDeserializationException ex) {
+                consumer.seek(ex.topicPartition(), ex.offset() + 1L);
+                consumer.commitSync();
+            }
         }
     }
 

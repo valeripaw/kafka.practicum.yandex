@@ -7,37 +7,13 @@ import lombok.Setter;
 @Setter
 public class ConsumerProperties {
 
-    /**
-     * Наименование топика.
-     */
     private String topic;
-    /**
-     *
-     */
     private String groupId;
-    /**
-     *
-     */
     private boolean enableAutoCommit;
-    /**
-     *
-     */
     private int autoCommitIntervalMs;
-    /**
-     *
-     */
     private int maxPollRecords;
-    /**
-     *
-     */
     private int fetchMinBytes;
-    /**
-     *
-     */
     private int fetchMaxWaitMs;
-    /**
-     *
-     */
     private long pollDurationMs;
 
 }

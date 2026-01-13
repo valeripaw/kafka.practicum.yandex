@@ -7,20 +7,9 @@ import lombok.Setter;
 @Setter
 public class ProducerProperties {
 
-    /**
-     * Наименование топика.
-     */
     private String topic;
-    /**
-     *
-     */
     private String acks;
-    /**
-     *
-     */
     private int retries;
-    /**
-     *
-     */
+    private long retryBackoffMs;
     private boolean enableIdempotence;
 }
