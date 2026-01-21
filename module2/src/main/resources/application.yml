@@ -1,0 +1,15 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
+kafka:
+  bootstrap-servers: ${BOOTSTRAP_SERVERS}
+  schema-registry-url: ${SCHEMA_REGISTRY_URL}
+  app-id: 1a2489e64a2c
+  blocked-user:
+    topic: blocked-user
+  private-message:
+    topic: private-message
+  censored-message:
+    topic: censored-message
