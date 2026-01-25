@@ -1,10 +1,8 @@
 package ru.valeripaw.kafka.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
+
+import java.util.Set;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -13,6 +11,6 @@ import lombok.ToString;
 @ToString
 public class Tmp {
 
-    private Message message;
-    private String blockedUser;
+    private PrivateMessage message;
+    private Set<String> blockedUsersSet;
 }

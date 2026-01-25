@@ -3,29 +3,27 @@ package ru.valeripaw.kafka.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.GlobalKTable;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import ru.valeripaw.kafka.dto.Message;
+import ru.valeripaw.kafka.dto.PrivateMessage;
 import ru.valeripaw.kafka.dto.Tmp;
 import ru.valeripaw.kafka.properties.KafkaProperties;
+import ru.valeripaw.kafka.serde.JsonSetSerde;
+import ru.valeripaw.kafka.serde.PrivateMessageSerde;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
-import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.*;
 
 /**
  * Подзадача 1.  Блокировка нежелательных пользователей
@@ -54,93 +52,7 @@ public class BlockingService implements Closeable, Runnable {
 
         // Строим топологию
         StreamsBuilder builder = new StreamsBuilder();
-
-        // GlobalKTable<String, String> хранит пары:
-        //     ключ: user (тот, кто блокирует)
-        //     значение: blockedUser (тот, кого заблокировали)
-        String storeName = kafkaProperties.getBlockedUser().getTopic() + "-store";
-        GlobalKTable<String, String> blockedUsers = builder.globalTable(
-                kafkaProperties.getBlockedUser().getTopic(),
-                Consumed.with(Serdes.String(), Serdes.String()),
-                Materialized.as(storeName)
-        );
-
-        // Поток сообщений
-        //     ключ: user, кто отправляет сообщение
-        //     значение: объект Message
-        KStream<String, String> privateMessagesStream = builder.stream(
-                kafkaProperties.getPrivateMessage().getTopic(),
-                Consumed.with(Serdes.String(), Serdes.String())
-        );
-
-        ValueMapper<String, Message> messageMapper = value -> {
-            try {
-                return MAPPER.readValue(value, Message.class);
-            } catch (Exception e) {
-                throw new RuntimeException("Ошибка десериализации Message", e);
-            }
-        };
-        KStream<String, Message> parsedMessages = privateMessagesStream
-                .mapValues(messageMapper);
-
-        // у blockedUsers и parsedMessages должен быть один ключ
-        KStream<String, String> result = parsedMessages
-                .join(
-                        // Соединяем с глобальной таблицей
-                        blockedUsers,
-                        // Функция извлечения ключа для поиска в GlobalKTable: кому сообщение
-                        (userFrom, message) -> message.getTo(),
-                        // Функция соединения данных
-                        Tmp::new
-                )
-                .filter((key, tmp) -> {
-                    log.info("Обрабатываем key={} value={}", key, tmp);
-
-                    if ((tmp == null) || (tmp.getMessage() == null)) {
-                        return false;
-                    }
-                    Message message = tmp.getMessage();
-                    if (!StringUtils.hasText(message.getFrom()) || !StringUtils.hasText(message.getTo())) {
-                        return false;
-                    }
-
-                    return true;
-//                    // Проверяем, заблокирован ли отправитель получателем
-//                    String blockedUser = blockedUsers.value(message.getTo(), message.getFrom());
-//                    // Если в хранилище есть запись: получатель (to) заблокировал отправителя (from)
-//                    return blockedUser == null;
-                })
-                .map((key, tmp) -> KeyValue.pair(key, tmp.getMessage().getText()));
-
-        // Отправляем результат в выходной топик
-        result.to(
-                kafkaProperties.getCensoredMessage().getTopic(),
-                Produced.with(Serdes.String(), Serdes.String())
-        );
-
-//        // Фильтрация: проверяем, не заблокирован ли отправитель получателем
-//        KStream<String, Message> filteredMessages = parsedMessages
-
-//
-//        // Отправляем отфильтрованные сообщения в выходной топик
-//        filteredMessages
-//                .mapValues(msg -> {
-//                    try {
-//                        return MAPPER.writeValueAsString(msg);
-//                    } catch (Exception e) {
-//                        throw new RuntimeException("Ошибка сериализации Message", e);
-//                    }
-//                })
-//                .to("FILTERED_MESSAGES_TOPIC", Produced.with(Serdes.String(), Serdes.String()));
-
-        // GlobalKTable<String, String> хранит пары:
-        //     ключ: user (тот, кто блокирует), значение: blockedUser (тот, кого заблокировали).
-        // Но для поиска нам нужно: "заблокировал ли to пользователя from?".
-        // Поэтому при записи в топик user-blocks нужно отправлять ключ как user (тот, кто блокирует), а значение — blockedUser.
-        // При фильтрации мы делаем:
-        //     blockedUsers.value(message.to, message.from)
-        // Это проверяет, есть ли в хранилище запись, где user = message.to и blockedUser = message.from.
-        // GlobalKTable не поддерживает составные ключи напрямую. Поэтому мы используем поиск по ключу и значению через .value(key, value) — это работает, только если значение хранится как строка.
+        buildTopology(kafkaProperties, builder);
 
         // Создаем Kafka Streams
         this.streams = new KafkaStreams(builder.build(), properties);
@@ -156,5 +68,106 @@ public class BlockingService implements Closeable, Runnable {
     public void run() {
         log.info("BlockingService запущен.");
         streams.start();
+    }
+
+    private void buildTopology(KafkaProperties kafkaProperties, StreamsBuilder builder) {
+        // Агрегируем блокировки
+        //     ключ: тот, кто блокирует
+        //     значение: список тех, кого заблокировали
+        String storeName = kafkaProperties.getBlockedUser().getTopic() + "-store";
+        KTable<String, Set<String>> userBlocks = builder
+                .<String, String>stream(kafkaProperties.getBlockedUser().getTopic())
+                .groupByKey()
+                .aggregate(
+                        HashSet::new,
+                        (userId, blockedUser, blockedUsersSet) -> {
+                            blockedUsersSet.add(blockedUser);
+                            return blockedUsersSet;
+                        },
+                        Materialized.<String, Set<String>, KeyValueStore<Bytes, byte[]>>as(storeName)
+                                .withKeySerde(Serdes.String())
+                                .withValueSerde(new JsonSetSerde())
+                );
+
+        // Поток личных сообщений
+        KStream<String, String> messageStream = builder.stream(kafkaProperties.getPrivateMessage().getTopic());
+        KStream<String, PrivateMessage> parsedMessages = messageStream
+                .mapValues(value -> {
+                    try {
+                        return MAPPER.readValue(value, PrivateMessage.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Ошибка парсинга сообщения", e);
+                    }
+                });
+
+        // Ключ = получатель (to)
+        KStream<String, PrivateMessage> keyedByRecipient = parsedMessages
+                .selectKey((key, msg) -> msg.getTo());
+
+        KStream<String, Tmp> joined = keyedByRecipient
+                .leftJoin(
+                        userBlocks,
+                        Tmp::new,
+                        Joined.with(
+                                Serdes.String(),
+                                new PrivateMessageSerde(),
+                                new JsonSetSerde()
+                        )
+                );
+
+        // Фильтрация: проверяем, заблокирован ли отправитель получателем
+        KStream<String, PrivateMessage> filteredMessages = joined
+                .filter((key, tmp) -> {
+                    log.info("key={} tmp={}", key, tmp);
+                    if ((tmp == null) || (tmp.getMessage() == null)) {
+                        return false;
+                    }
+
+                    PrivateMessage message = tmp.getMessage();
+                    if (!StringUtils.hasText(message.getFrom())
+                            || !StringUtils.hasText(message.getTo())
+                            || !StringUtils.hasText(message.getText())) {
+                        return false;
+                    }
+
+                    log.info("from={} to={}", message.getFrom(), message.getTo());
+
+                    // если отправили сами себе, ничего не проверяем
+                    if (message.getFrom().equals(message.getTo())) {
+                        log.info("Отправили сами себе");
+                        return true;
+                    }
+
+                    // Получаем список заблокированных пользователем `message.to`
+                    Set<String> blockedUsersSet = tmp.getBlockedUsersSet();
+                    log.info("blockedUsersSet={}", blockedUsersSet);
+                    if (CollectionUtils.isEmpty(blockedUsersSet)) {
+                        log.info("Юзера {} никто не заблокировал", message.getFrom());
+                        return true;
+                    }
+
+                    boolean isBlocked = blockedUsersSet.contains(message.getFrom());
+                    if (isBlocked) {
+                        log.info("{} заблокировал(а) {}, сообщение не будет отправлено", message.getTo(), message.getFrom());
+                    }
+
+                    return !isBlocked;
+                })
+                .mapValues(Tmp::getMessage);
+
+
+        // Отправка в выходной топик
+        filteredMessages
+                .mapValues(msg -> {
+                    try {
+                        return MAPPER.writeValueAsString(msg);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Ошибка сериализации", e);
+                    }
+                })
+                .to(
+                        kafkaProperties.getCensoredMessage().getTopic(),
+                        Produced.with(Serdes.String(), Serdes.String())
+                );
     }
 }
