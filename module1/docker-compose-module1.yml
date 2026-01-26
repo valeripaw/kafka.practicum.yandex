@@ -6,7 +6,7 @@ networks:
     name: kafka-cluster-network
 
 services:
-  kafka-practicum-yandex:
+  kafka-practicum-yandex-module1:
     build:
       context: .
       dockerfile: Dockerfile

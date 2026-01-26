@@ -26,9 +26,9 @@ public class PrivateMessageSerde implements Serde<PrivateMessage> {
 
     @Override
     public Serializer<PrivateMessage> serializer() {
-        return (topic, message) -> {
+        return (topic, data) -> {
             try {
-                return message == null ? null : mapper.writeValueAsBytes(message);
+                return data == null ? null : mapper.writeValueAsBytes(data);
             } catch (Exception e) {
                 throw new RuntimeException("Ошибка сериализации PrivateMessage", e);
             }

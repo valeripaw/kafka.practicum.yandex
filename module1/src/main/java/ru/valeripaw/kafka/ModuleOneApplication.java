@@ -19,12 +19,12 @@ import java.util.concurrent.Executors;
 @Slf4j
 @SpringBootApplication
 @EnableConfigurationProperties(KafkaProperties.class)
-public class KafkaApplication {
+public class ModuleOneApplication {
 
     private static final Random random = new Random();
 
     public static void main(String[] args) {
-        ApplicationContext context = SpringApplication.run(KafkaApplication.class, args);
+        ApplicationContext context = SpringApplication.run(ModuleOneApplication.class, args);
 
         KafkaProperties kafkaProperties = context.getBean(KafkaProperties.class);
 

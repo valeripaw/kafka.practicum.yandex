@@ -11,8 +11,8 @@ import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import ru.valeripaw.kafka.dto.AggregatedData;
 import ru.valeripaw.kafka.dto.PrivateMessage;
-import ru.valeripaw.kafka.dto.Tmp;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 import ru.valeripaw.kafka.serde.JsonSetSerde;
 import ru.valeripaw.kafka.serde.PrivateMessageSerde;
@@ -92,22 +92,16 @@ public class BlockingService implements Closeable, Runnable {
         // Поток личных сообщений
         KStream<String, String> messageStream = builder.stream(kafkaProperties.getPrivateMessage().getTopic());
         KStream<String, PrivateMessage> parsedMessages = messageStream
-                .mapValues(value -> {
-                    try {
-                        return MAPPER.readValue(value, PrivateMessage.class);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Ошибка парсинга сообщения", e);
-                    }
-                });
+                .mapValues(this::mapPrivateMessage);
 
-        // Ключ = получатель (to)
+        // меняем ключ на получателя (to)
         KStream<String, PrivateMessage> keyedByRecipient = parsedMessages
-                .selectKey((key, msg) -> msg.getTo());
+                .selectKey((key, message) -> message.getTo());
 
-        KStream<String, Tmp> joined = keyedByRecipient
+        KStream<String, AggregatedData> joined = keyedByRecipient
                 .leftJoin(
                         userBlocks,
-                        Tmp::new,
+                        AggregatedData::new,
                         Joined.with(
                                 Serdes.String(),
                                 new PrivateMessageSerde(),
@@ -117,50 +111,14 @@ public class BlockingService implements Closeable, Runnable {
 
         // Фильтрация: проверяем, заблокирован ли отправитель получателем
         KStream<String, PrivateMessage> filteredMessages = joined
-                .filter((key, tmp) -> {
-                    log.info("key={} tmp={}", key, tmp);
-                    if ((tmp == null) || (tmp.getMessage() == null)) {
-                        return false;
-                    }
-
-                    PrivateMessage message = tmp.getMessage();
-                    if (!StringUtils.hasText(message.getFrom())
-                            || !StringUtils.hasText(message.getTo())
-                            || !StringUtils.hasText(message.getText())) {
-                        return false;
-                    }
-
-                    log.info("from={} to={}", message.getFrom(), message.getTo());
-
-                    // если отправили сами себе, ничего не проверяем
-                    if (message.getFrom().equals(message.getTo())) {
-                        log.info("Отправили сами себе");
-                        return true;
-                    }
-
-                    // Получаем список заблокированных пользователем `message.to`
-                    Set<String> blockedUsersSet = tmp.getBlockedUsersSet();
-                    log.info("blockedUsersSet={}", blockedUsersSet);
-                    if (CollectionUtils.isEmpty(blockedUsersSet)) {
-                        log.info("Юзера {} никто не заблокировал", message.getFrom());
-                        return true;
-                    }
-
-                    boolean isBlocked = blockedUsersSet.contains(message.getFrom());
-                    if (isBlocked) {
-                        log.info("{} заблокировал(а) {}, сообщение не будет отправлено", message.getTo(), message.getFrom());
-                    }
-
-                    return !isBlocked;
-                })
-                .mapValues(Tmp::getMessage);
-
+                .filter(this::isBlocked)
+                .mapValues(AggregatedData::getMessage);
 
         // Отправка в выходной топик
         filteredMessages
-                .mapValues(msg -> {
+                .mapValues(message -> {
                     try {
-                        return MAPPER.writeValueAsString(msg);
+                        return MAPPER.writeValueAsString(message);
                     } catch (Exception e) {
                         throw new RuntimeException("Ошибка сериализации", e);
                     }
@@ -170,4 +128,52 @@ public class BlockingService implements Closeable, Runnable {
                         Produced.with(Serdes.String(), Serdes.String())
                 );
     }
+
+    private PrivateMessage mapPrivateMessage(String value) {
+        try {
+            return MAPPER.readValue(value, PrivateMessage.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка парсинга сообщения", e);
+        }
+    }
+
+    // проверяем, заблокирован ли отправитель получателем
+    private boolean isBlocked(String key, AggregatedData aggregatedData) {
+        log.info("key={} aggregatedData={}", key, aggregatedData);
+        if ((aggregatedData == null) || (aggregatedData.getMessage() == null)) {
+            return false;
+        }
+
+        PrivateMessage message = aggregatedData.getMessage();
+        if (!StringUtils.hasText(message.getFrom())
+                || !StringUtils.hasText(message.getTo())
+                || !StringUtils.hasText(message.getText())) {
+            return false;
+        }
+
+        log.info("from={} to={}", message.getFrom(), message.getTo());
+
+        // если отправили сами себе, ничего не проверяем
+        if (message.getFrom().equals(message.getTo())) {
+            log.info("Отправили сами себе");
+            return true;
+        }
+
+        // Получаем список заблокированных пользователем `message.to`
+        Set<String> blockedUsersSet = aggregatedData.getBlockedUsersSet();
+        log.info("blockedUsersSet={}", blockedUsersSet);
+
+        if (CollectionUtils.isEmpty(blockedUsersSet)) {
+            log.info("Пользователя {} никто не заблокировал", message.getFrom());
+            return true;
+        }
+
+        boolean isBlocked = blockedUsersSet.contains(message.getFrom());
+        if (isBlocked) {
+            log.info("{} заблокировал(а) {}, сообщение не будет отправлено", message.getTo(), message.getFrom());
+        }
+
+        return !isBlocked;
+    }
+
 }
