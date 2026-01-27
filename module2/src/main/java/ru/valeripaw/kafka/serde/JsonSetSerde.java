@@ -29,9 +29,9 @@ public class JsonSetSerde implements Serde<Set<String>> {
     public Serializer<Set<String>> serializer() {
         return (topic, data) -> {
             try {
-                return mapper.writeValueAsBytes(data);
+                return data == null ? null : mapper.writeValueAsBytes(data);
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException("Ошибка сериализации Set<String>", e);
             }
         };
     }
@@ -40,9 +40,10 @@ public class JsonSetSerde implements Serde<Set<String>> {
     public Deserializer<Set<String>> deserializer() {
         return (topic, data) -> {
             try {
-                return mapper.readValue(data, new TypeReference<Set<String>>() {});
+                return data == null ? null : mapper.readValue(data, new TypeReference<Set<String>>() {
+                });
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException("Ошибка десериализации Set<String>", e);
             }
         };
     }

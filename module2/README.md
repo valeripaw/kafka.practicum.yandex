@@ -44,32 +44,6 @@ kafka3      confluentinc/cp-kafka:7.6.0       "/etc/confluent/dock…"   kafka3 
 zookeeper   confluentinc/cp-zookeeper:7.6.0   "/etc/confluent/dock…"   zookeeper   5 seconds ago   Up 4 seconds   2888/tcp, 0.0.0.0:2181->2181/tcp, :::2181->2181/tcp, 3888/tcp
 ```
 
-2. Создайте тестовый топик командой:
-```
-docker exec kafka1 kafka-topics --create \
-  --topic test-topic \
-  --bootstrap-server localhost:9092 \
-  --partitions 3 \
-  --replication-factor 3
-```
-3. Посмотреть список топиков командой:
-```
-docker exec kafka1 kafka-topics --list --bootstrap-server kafka1:9092
-```
-
-4. Отправьте сообщение в топик командой:
-```
-echo "Hello Kafka" | docker exec -i kafka1 kafka-console-producer --bootstrap-server kafka1:9092 --topic test-topic
-
-```
-
-5. Прочитайте сообщение из топика командой:
-```
-docker exec -it kafka1 kafka-console-consumer --bootstrap-server kafka1:9092 --topic test-topic --from-beginning --max-messages 1
-```
-
-Если Вы видите сообщение — кластер работает корректно.
-
 # Проверка через Kafka UI
 
 1. Откройте браузер и перейдите по адресу: [http://localhost:8080](http://localhost:8080)
@@ -92,15 +66,17 @@ docker exec -it kafka1 kafka-console-consumer --bootstrap-server kafka1:9092 --t
 1. Запустите приложение командой 
 
 ```
-docker-compose -f docker-compose-module1.yml up -d
+docker-compose -f docker-compose-module2.yml up -d
 ```
 
 Подождите 1–2 минуты, пока пока поднимутся два контейнера.
 
-Приложение будет генерировать и отправлять в топик одно сообщение раз в три секудны. 
-Консьюмеры будут читать сообщения в сответствие с их настройками:
-    - SingleMessageConsumer по одному сообщению за раз;
-    - BatchMessageConsumer минимум по 10 сообщений за один раз.
+Приложение само:
+- создаст три топика, указанные в конфигах: `kafka.blocked-user.topic`, `kafka.private-message.topic` и `kafka.censored-message.topic`;
+- сгенерирует список заблокированных пользователей и отправит его в `kafka.blocked-user.topic`;
+- сгенерирует сообщения от всех пользователей всем пользователям, даже заблокированным, и отправит их в `kafka.private-message.topic`.
+
+Топология, созданная в BlockingService, читает блокировки и сообщения, и фильтрует сообщения в соответствие с блокировками.
 
 # Остановка кластера
 

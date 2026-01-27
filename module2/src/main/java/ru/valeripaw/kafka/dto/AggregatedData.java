@@ -9,7 +9,7 @@ import java.util.Set;
 @Getter
 @Setter
 @ToString
-public class Tmp {
+public class AggregatedData {
 
     private PrivateMessage message;
     private Set<String> blockedUsersSet;
