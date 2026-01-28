@@ -1,3 +1,6 @@
+server:
+  port: 9193
+
 spring:
   docker:
     compose:
@@ -13,3 +16,9 @@ kafka:
     topic: private-message
   censored-message:
     topic: censored-message
+
+banned-words:
+  # базовые формы слов, голубь -> голуб, площадь -> площад
+  root: голуб, площад
+
+logging.level.org.springframework.web: trace

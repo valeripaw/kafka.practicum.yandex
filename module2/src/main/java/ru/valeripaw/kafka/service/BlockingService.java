@@ -13,6 +13,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import ru.valeripaw.kafka.dto.AggregatedData;
 import ru.valeripaw.kafka.dto.PrivateMessage;
+import ru.valeripaw.kafka.properties.BannedWordsProperties;
 import ru.valeripaw.kafka.properties.KafkaProperties;
 import ru.valeripaw.kafka.serde.JsonSetSerde;
 import ru.valeripaw.kafka.serde.PrivateMessageSerde;
@@ -22,6 +23,8 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.StreamsConfig.*;
 
@@ -39,7 +42,7 @@ public class BlockingService implements Closeable, Runnable {
 
     private final KafkaStreams streams;
 
-    public BlockingService(KafkaProperties kafkaProperties) {
+    public BlockingService(KafkaProperties kafkaProperties, BannedWordsProperties bannedWordsProperties) {
         // Настройка свойств Kafka Streams
         Properties properties = new Properties();
         properties.put(APPLICATION_ID_CONFIG, kafkaProperties.getAppId());
@@ -52,7 +55,7 @@ public class BlockingService implements Closeable, Runnable {
 
         // Строим топологию
         StreamsBuilder builder = new StreamsBuilder();
-        buildTopology(kafkaProperties, builder);
+        buildTopology(kafkaProperties, bannedWordsProperties, builder);
 
         // Создаем Kafka Streams
         this.streams = new KafkaStreams(builder.build(), properties);
@@ -70,7 +73,10 @@ public class BlockingService implements Closeable, Runnable {
         streams.start();
     }
 
-    private void buildTopology(KafkaProperties kafkaProperties, StreamsBuilder builder) {
+    private void buildTopology(KafkaProperties kafkaProperties, BannedWordsProperties bannedWordsProperties,
+                               StreamsBuilder builder) {
+        log.info("Плохие слова {}", bannedWordsProperties.getRoot());
+
         // Агрегируем блокировки
         //     ключ: тот, кто блокирует
         //     значение: список тех, кого заблокировали
@@ -112,6 +118,7 @@ public class BlockingService implements Closeable, Runnable {
         // Фильтрация: проверяем, заблокирован ли отправитель получателем
         KStream<String, PrivateMessage> filteredMessages = joined
                 .filter(this::isBlocked)
+                .mapValues(aggregatedData -> maskMessage(aggregatedData, bannedWordsProperties))
                 .mapValues(AggregatedData::getMessage);
 
         // Отправка в выходной топик
@@ -127,6 +134,43 @@ public class BlockingService implements Closeable, Runnable {
                         kafkaProperties.getCensoredMessage().getTopic(),
                         Produced.with(Serdes.String(), Serdes.String())
                 );
+    }
+
+    private AggregatedData maskMessage(AggregatedData aggregatedData, BannedWordsProperties bannedWordsProperties) {
+        PrivateMessage message = aggregatedData.getMessage();
+        String censoredText = message.getText();
+        Set<String> censoredWords = bannedWordsProperties.getRoot();
+
+        if (CollectionUtils.isEmpty(censoredWords)) {
+            return aggregatedData;
+        }
+
+        Pattern pattern = Pattern.compile("\\p{L}+");
+        Matcher matcher = pattern.matcher(censoredText);
+
+        StringBuilder result = new StringBuilder();
+
+        while (matcher.find()) {
+            String word = matcher.group();
+            String lowerWord = word.toLowerCase();
+            boolean banned = censoredWords.stream().anyMatch(lowerWord::startsWith);
+            if (banned) {
+                matcher.appendReplacement(result, getMaskForWord(word));
+            } else {
+                matcher.appendReplacement(result, word);
+            }
+        }
+
+        matcher.appendTail(result);
+        message.setText(result.toString());
+
+        log.info("Сообщение до: `{}`\nпосле: `{}`", censoredText, message.getText());
+
+        return aggregatedData;
+    }
+
+    private String getMaskForWord(String word) {
+        return "*".repeat(word.length());
     }
 
     private PrivateMessage mapPrivateMessage(String value) {
