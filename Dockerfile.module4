@@ -1,0 +1,17 @@
+FROM maven:4.0.0-rc-5-amazoncorretto-21-debian AS build
+WORKDIR /app
+
+# Copy the parent pom.xml (at the root of the build context)
+COPY pom-standalone-mod4.xml ./pom.xml
+
+# Copy the module's pom.xml and source code
+COPY module4/pom.xml ./module4/
+COPY module4/src ./module4/src
+
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre-ubi10-minimal
+WORKDIR /app
+COPY --from=build /app/module4/target/*.jar app.jar
+EXPOSE 9193
+ENTRYPOINT ["java", "-jar", "app.jar"]
