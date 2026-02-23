@@ -1,0 +1,157 @@
+version: '3.8'
+
+networks:
+  kafka-net:
+    driver: bridge
+    name: kafka-cluster-network
+  monitoring:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka1
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka1
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry
+    container_name: schema-registry
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka1
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka1:19092
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    hostname: postgres
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: kafka
+      POSTGRES_USER: kafka
+      POSTGRES_PASSWORD: kafka
+    volumes:
+      - ./module4/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+
+  kafka-connect:
+    image: debezium/connect:2.6
+    container_name: kafka-connect
+    networks:
+      - kafka-net
+      - monitoring
+    depends_on:
+      - kafka1
+      - postgres
+    ports:
+      - "8083:8083"
+      - "9404:9404"
+    volumes:
+      - ./module4/kafka-connect/jmx:/opt/jmx
+      - ./module4/jmx:/module4/jmx
+    environment:
+      BOOTSTRAP_SERVERS: kafka1:19092
+      GROUP_ID: connect-cluster
+      CONFIG_STORAGE_TOPIC: connect-configs
+      OFFSET_STORAGE_TOPIC: connect-offsets
+      STATUS_STORAGE_TOPIC: connect-status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      PLUGIN_PATH: /kafka/connect
+      KAFKA_OPTS: >
+        -javaagent:/module4/jmx/jmx_prometheus_javaagent-0.20.0.jar=9404:/opt/jmx/kafka-connect.yml
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    platform: linux/arm64
+    ports:
+      - 9090:9090
+    depends_on:
+      - kafka-connect
+    volumes:
+      - ./module4/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./module4/prometheus:/prometheus
+    command: "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - kafka-net
+      - monitoring
+
+  grafana:
+    build: ./module4/grafana
+    container_name: grafana
+    platform: linux/arm64
+    ports:
+      - 3000:3000
+    environment:
+      GF_PATHS_DATA: /var/lib/grafana
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+    networks:
+      - kafka-net
+      - monitoring

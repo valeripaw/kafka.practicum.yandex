@@ -1,0 +1,34 @@
+server:
+  port: 9193
+
+spring:
+  docker:
+    compose:
+      enabled: false
+
+kafka:
+  bootstrap-servers: ${BOOTSTRAP_SERVERS}
+  schema-registry-url: ${SCHEMA_REGISTRY_URL}
+  postgres-user:
+    topic: postgres.public.users
+    group-id: postgres-public-users.1
+    enable: true
+  postgres-order:
+    topic: postgres.public.orders
+    group-id: postgres-public-orders.1
+    enable: true
+
+logging.level.org.springframework.web: trace
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
