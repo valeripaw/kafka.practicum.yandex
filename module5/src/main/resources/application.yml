@@ -1,0 +1,19 @@
+server:
+  port: 9193
+
+spring:
+  docker:
+    compose:
+      enabled: false
+
+kafka:
+  bootstrap-servers: ${BOOTSTRAP_SERVERS}
+  # consumers
+  topic-one:
+    topic: topic-1
+    group-id: topic-1.1
+    enable: true
+  topic-two:
+    topic: topic-2
+    group-id: topic-2.1
+    enable: true
