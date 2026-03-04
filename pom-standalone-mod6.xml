@@ -21,12 +21,7 @@
     </properties>
 
     <modules>
-        <module>module1</module>
-        <module>module2</module>
-        <module>module4</module>
-        <module>module5</module>
         <module>module6</module>
     </modules>
-
 
 </project>
