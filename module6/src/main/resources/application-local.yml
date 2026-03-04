@@ -1,0 +1,11 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
+kafka:
+  bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+  schema-registry-url: http://localhost:8081
+
+# определяет к какой кафке обращаться
+local-env: true
