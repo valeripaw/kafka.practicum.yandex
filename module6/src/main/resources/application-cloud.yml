@@ -1,0 +1,11 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+
+kafka:
+  bootstrap-servers: rc1a-tedm47m75r80aur7.mdb.yandexcloud.net:9092,rc1b-2q9f5l3vjm4n3iso.mdb.yandexcloud.net:9092,rc1d-2l6lsdqcgpu9u24h.mdb.yandexcloud.net:9092
+  schema-registry-url: https://c9qkd7mse6tg8s7q7i7e.schema-registry.yandexcloud.net:443
+
+# определяет к какой кафке обращаться
+local-env: false
