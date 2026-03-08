@@ -1,0 +1,19 @@
+version: '3.8'
+
+networks:
+  kafka-net:
+    driver: bridge
+    name: kafka-cluster-network
+
+services:
+  kafka-practicum-yandex-module6:
+    build:
+      context: .
+      dockerfile: Dockerfile.module6
+    platform: linux/arm64
+    networks:
+      - kafka-net
+    environment:
+      BOOTSTRAP_SERVERS: rc1a-832o9qir77b47g7g.mdb.yandexcloud.net:9091,rc1b-7864vav1e5abhngd.mdb.yandexcloud.net:9091,rc1d-t920tc533mtp4336.mdb.yandexcloud.net:9091
+      SCHEMA_REGISTRY_URL: https://srngiim1anfoggfj0qdb.schema-registry.yandexcloud.net:443
+      LOCAL_ENV: false

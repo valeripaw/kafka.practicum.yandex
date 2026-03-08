@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  nifi:
+    image: apache/nifi:1.28.0
+    container_name: nifi
+    platform: linux/arm64
+    ports:
+      - "8443:8443"
+    environment:
+      NIFI_WEB_HTTPS_PORT: 8443
+      NIFI_WEB_HTTPS_HOST: 0.0.0.0
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      SINGLE_USER_CREDENTIALS_PASSWORD: qwerty123qwerty
+    volumes:
+      - ./module6/nifi:/opt/nifi/nifi-current/input
+      - ./module6/ca/truststore.jks:/opt/nifi/nifi-current/truststore.jks

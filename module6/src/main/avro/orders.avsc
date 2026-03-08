@@ -1,0 +1,27 @@
+{
+    "type": "record",
+    "name": "OrderEvent",
+    "namespace": "ru.valeripaw.kafka.dto",
+    "fields": [
+        {
+            "name": "orderId",
+            "type": "string"
+        },
+        {
+            "name": "userId",
+            "type": "string"
+        },
+        {
+            "name": "amount",
+            "type": "double"
+        },
+        {
+            "name": "currency",
+            "type": "string"
+        },
+        {
+            "name": "createdAt",
+            "type": "long"
+        }
+    ]
+}
